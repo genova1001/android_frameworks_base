@@ -3971,6 +3971,13 @@ public final class Settings {
          */
         public static final String GESTURE_TWO_FINGER_SWIPE = "gesture_two_finger_swipe";
 
+	/**
+         * Boolean value whether to link ringtone and notification volume
+         *
+         * @hide
+         */
+        public static final String VOLUME_LINK_NOTIFICATION = "volume_link_notification";
+
         /**
          * Controls whether statusbar double tap to sleep is enabled
          * @hide

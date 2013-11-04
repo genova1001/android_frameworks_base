@@ -42,6 +42,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.os.SystemClock;
+import android.provider.Settings;
 import android.provider.Settings.Global;
 import android.transition.AutoTransition;
 import android.transition.Transition;
@@ -147,7 +148,7 @@ public class VolumeDialog implements TunerService.Tunable {
     private TunerZenModePanel mZenPanel;
 
     public VolumeDialog(Context context, int windowType, VolumeDialogController controller,
-            ZenModeController zenModeController, Callback callback) {
+                        ZenModeController zenModeController, Callback callback) {
         mContext = context;
         mController = controller;
         mCallback = callback;
@@ -238,21 +239,23 @@ public class VolumeDialog implements TunerService.Tunable {
                 });
 
         if (mRows.isEmpty()) {
-            addRow(AudioManager.STREAM_RING,
-                    R.drawable.ic_volume_ringer, R.drawable.ic_volume_ringer_mute, true);
-            addRow(AudioManager.STREAM_MUSIC,
-                    R.drawable.ic_volume_media, R.drawable.ic_volume_media_mute, true);
-            addRow(AudioManager.STREAM_ALARM,
-                    R.drawable.ic_volume_alarm, R.drawable.ic_volume_alarm_mute, false);
-            addRow(AudioManager.STREAM_VOICE_CALL,
-                    R.drawable.ic_volume_voice, R.drawable.ic_volume_voice, false);
-            addRow(AudioManager.STREAM_BLUETOOTH_SCO,
-                    R.drawable.ic_volume_bt_sco, R.drawable.ic_volume_bt_sco, false);
-            addRow(AudioManager.STREAM_SYSTEM,
-                    R.drawable.ic_volume_system, R.drawable.ic_volume_system_mute, false);
+	     addRow(AudioManager.STREAM_RING,
+                     R.drawable.ic_volume_ringer, R.drawable.ic_volume_ringer_mute, true);
+             addRow(AudioManager.STREAM_NOTIFICATION,
+                    R.drawable.ic_volume_notification, R.drawable.ic_volume_notification_mute, true);
+             addRow(AudioManager.STREAM_MUSIC,
+                     R.drawable.ic_volume_media, R.drawable.ic_volume_media_mute, true);
+             addRow(AudioManager.STREAM_ALARM,
+                     R.drawable.ic_volume_alarm, R.drawable.ic_volume_alarm_mute, false);
+             addRow(AudioManager.STREAM_VOICE_CALL,
+                     R.drawable.ic_volume_voice, R.drawable.ic_volume_voice, false);
+             addRow(AudioManager.STREAM_BLUETOOTH_SCO,
+                     R.drawable.ic_volume_bt_sco, R.drawable.ic_volume_bt_sco, false);
+             addRow(AudioManager.STREAM_SYSTEM,R.drawable.ic_volume_system, R.drawable.ic_volume_system_mute, false);
         } else {
             addExistingRows();
         }
+
         mExpandButtonAnimationDuration = res.getInteger(R.integer.volume_expand_animation_duration);
         mZenFooter = (ZenFooter) mDialog.findViewById(R.id.volume_zen_footer);
         mZenFooter.init(mZenModeController);
@@ -452,6 +455,12 @@ public class VolumeDialog implements TunerService.Tunable {
                             mController.setStreamVolume(stream, 1);
                         }
                     }
+		} else if (row.stream == AudioManager.STREAM_NOTIFICATION) {
+                    // only ringer icon can change silent or vibrate mode
+                    if (mState.ringerModeInternal == AudioManager.RINGER_MODE_NORMAL) {
+                        final boolean vmute = row.ss.level == 0;
+                        mController.setStreamVolume(stream, vmute ? row.lastAudibleLevel : 0);
+                    }
                 } else {
                     final boolean vmute = row.ss.level == row.ss.levelMin;
                     mController.setStreamVolume(stream,
@@ -643,6 +652,12 @@ public class VolumeDialog implements TunerService.Tunable {
     }
 
     private boolean shouldBeVisibleH(VolumeRow row, boolean isActive) {
+	final boolean linkNotificationWithVolume = Settings.System.getInt(mContext.getContentResolver(),
+                Settings.System.VOLUME_LINK_NOTIFICATION, 1) == 1;
+        final boolean isNotificationStream = row.stream == AudioManager.STREAM_NOTIFICATION;
+        if (linkNotificationWithVolume && isNotificationStream) {
+            return false;
+        }
         return mExpanded && row.view.getVisibility() == View.VISIBLE
                 || (mExpanded && (row.important || isActive))
                 || !mExpanded && isActive;
@@ -674,7 +689,7 @@ public class VolumeDialog implements TunerService.Tunable {
             if (row.ss == null || !row.ss.dynamic) continue;
             if (!mDynamic.get(row.stream)) {
                 mRows.remove(i);
-                mDialogRowsView.removeView(row.view);
+		mDialogRowsView.removeView(row.view);
             }
         }
     }
@@ -753,18 +768,22 @@ public class VolumeDialog implements TunerService.Tunable {
             row.requestedLevel = -1;
         }
         final boolean isRingStream = row.stream == AudioManager.STREAM_RING;
+	final boolean isNotificationStream = row.stream == AudioManager.STREAM_NOTIFICATION;
+        final boolean isRingOrNotificationStream = isRingStream || isNotificationStream;
         final boolean isSystemStream = row.stream == AudioManager.STREAM_SYSTEM;
         final boolean isAlarmStream = row.stream == AudioManager.STREAM_ALARM;
         final boolean isMusicStream = row.stream == AudioManager.STREAM_MUSIC;
-        final boolean isRingVibrate = isRingStream
+        final boolean isRingVibrate = isRingOrNotificationStream
                 && mState.ringerModeInternal == AudioManager.RINGER_MODE_VIBRATE;
         final boolean isRingSilent = isRingStream
                 && mState.ringerModeInternal == AudioManager.RINGER_MODE_SILENT;
+        final boolean isNotificationSilent = isNotificationStream
+                && mState.ringerModeInternal == AudioManager.RINGER_MODE_SILENT;
         final boolean isZenAlarms = mState.zenMode == Global.ZEN_MODE_ALARMS;
         final boolean isZenNone = mState.zenMode == Global.ZEN_MODE_NO_INTERRUPTIONS;
-        final boolean zenMuted = isZenAlarms ? (isRingStream || isSystemStream)
-                : isZenNone ? (isRingStream || isSystemStream || isAlarmStream || isMusicStream)
-                : false;
+        final boolean zenMuted = isZenAlarms ? (isRingOrNotificationStream || isSystemStream)
+                : isZenNone ? (isRingOrNotificationStream || isSystemStream || isAlarmStream || isMusicStream)
+: false;
 
         // update slider max
         final int max = ss.levelMax * 100;
@@ -784,26 +803,26 @@ public class VolumeDialog implements TunerService.Tunable {
         row.icon.setAlpha(iconEnabled ? 1 : 0.5f);
         final int iconRes =
                 isRingVibrate ? R.drawable.ic_volume_ringer_vibrate
-                : isRingSilent || zenMuted ? row.cachedIconRes
+                : zenMuted ? row.cachedIconRes
                 : ss.routedToBluetooth ?
                         (ss.muted ? R.drawable.ic_volume_media_bt_mute
                                 : R.drawable.ic_volume_media_bt)
                 : mAutomute && ss.level == 0 ? row.iconMuteRes
-                : (ss.muted ? row.iconMuteRes : row.iconRes);
+		: (ss.muted ? row.iconMuteRes : row.iconRes);
         if (iconRes != row.cachedIconRes) {
             if (row.cachedIconRes != 0 && isRingVibrate) {
                 mController.vibrate();
             }
             row.cachedIconRes = iconRes;
             row.icon.setImageResource(iconRes);
-        }
+	}
         row.iconState =
                 iconRes == R.drawable.ic_volume_ringer_vibrate ? Events.ICON_STATE_VIBRATE
-                : (iconRes == R.drawable.ic_volume_media_bt_mute || iconRes == row.iconMuteRes)
+                        : (iconRes == R.drawable.ic_volume_media_bt_mute || iconRes == row.iconMuteRes)
                         ? Events.ICON_STATE_MUTE
-                : (iconRes == R.drawable.ic_volume_media_bt || iconRes == row.iconRes)
+                        : (iconRes == R.drawable.ic_volume_media_bt || iconRes == row.iconRes)
                         ? Events.ICON_STATE_UNMUTE
-                : Events.ICON_STATE_UNKNOWN;
+		: Events.ICON_STATE_UNKNOWN;
         if (iconEnabled) {
             if (isRingStream) {
                 if (isRingVibrate) {
@@ -836,10 +855,11 @@ public class VolumeDialog implements TunerService.Tunable {
             row.icon.setContentDescription(ss.name);
         }
 
-        // update slider
-        final boolean enableSlider = !zenMuted;
-        final int vlevel = row.ss.muted && (isRingVibrate || !isRingStream && !zenMuted) ? 0
-                : row.ss.level;
+        // notification slider is disabled when vibrate or silent - only ringer slider can be used
+        final boolean enableSlider = isNotificationStream ? (!zenMuted && !isRingVibrate && !isRingSilent && !isNotificationSilent) : !zenMuted;
+        // update slider value - 0 if silent or vibrate
+        final int vlevel = row.ss.muted && (isRingSilent || isNotificationSilent || isRingVibrate && !zenMuted) ? 0
+: row.ss.level;
         updateVolumeRowSliderH(row, enableSlider, vlevel);
     }
 
@@ -1224,7 +1244,7 @@ public class VolumeDialog implements TunerService.Tunable {
 
         @Override
         public boolean onRequestSendAccessibilityEvent(ViewGroup host, View child,
-                AccessibilityEvent event) {
+                                                       AccessibilityEvent event) {
             rescheduleTimeoutH();
             return super.onRequestSendAccessibilityEvent(host, child, event);
         }
