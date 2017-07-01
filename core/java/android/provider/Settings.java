@@ -4281,6 +4281,12 @@ public final class Settings {
          */
         public static final String WHEN_TO_MAKE_WIFI_CALLS = "when_to_make_wifi_calls";
 
+	/**
+         * Whether to prevent loud volume levels when headset is first plugged in.
+         * @hide
+         */
+	public static final String SAFE_HEADSET_VOLUME = "safe_headset_volume";
+
         // Settings moved to Settings.Secure
 
         /**
