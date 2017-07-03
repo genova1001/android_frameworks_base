@@ -795,7 +795,7 @@ public class VolumeDialog implements TunerService.Tunable {
         updateVolumeRowHeaderVisibleH(row);
 
         // update header text
-        Util.setText(row.header, ss.name);
+        Util.setText(row.header, isNotificationStream ? "Notification" : ss.name);
 
         // update icon
         final boolean iconEnabled = (mAutomute || ss.muteSupported) && !zenMuted;
